@@ -1,22 +1,53 @@
 
+import { db } from '../db';
+import { ordersTable } from '../db/schema';
 import { type UpdateOrderInput, type Order } from '../schema';
+import { eq } from 'drizzle-orm';
 
-export async function updateOrder(input: UpdateOrderInput): Promise<Order> {
-    // This is a placeholder declaration! Real code should be implemented here.
-    // The goal of this handler is to update existing order information in the database.
-    // Should handle status changes and update inventory if needed (e.g., cancellation).
-    return Promise.resolve({
-        id: input.id,
-        customer_id: 1,
-        user_id: 1,
-        order_number: 'ORD-001',
-        status: input.status || 'pending',
-        total_amount: 100,
-        discount_amount: input.discount_amount || 0,
-        tax_amount: input.tax_amount || 0,
-        notes: input.notes || null,
-        order_date: new Date(),
-        created_at: new Date(),
-        updated_at: new Date()
-    });
-}
+export const updateOrder = async (input: UpdateOrderInput): Promise<Order> => {
+  try {
+    // Build update object with only provided fields
+    const updateData: Record<string, any> = {
+      updated_at: new Date()
+    };
+
+    if (input.status !== undefined) {
+      updateData['status'] = input.status;
+    }
+
+    if (input.discount_amount !== undefined) {
+      updateData['discount_amount'] = input.discount_amount.toString();
+    }
+
+    if (input.tax_amount !== undefined) {
+      updateData['tax_amount'] = input.tax_amount.toString();
+    }
+
+    if (input.notes !== undefined) {
+      updateData['notes'] = input.notes;
+    }
+
+    // Update order record
+    const result = await db.update(ordersTable)
+      .set(updateData)
+      .where(eq(ordersTable.id, input.id))
+      .returning()
+      .execute();
+
+    if (result.length === 0) {
+      throw new Error(`Order with id ${input.id} not found`);
+    }
+
+    // Convert numeric fields back to numbers before returning
+    const order = result[0];
+    return {
+      ...order,
+      total_amount: parseFloat(order.total_amount),
+      discount_amount: parseFloat(order.discount_amount),
+      tax_amount: parseFloat(order.tax_amount)
+    };
+  } catch (error) {
+    console.error('Order update failed:', error);
+    throw error;
+  }
+};
